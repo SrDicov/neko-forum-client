@@ -10,9 +10,36 @@ permissions:
   contents: write
 
 jobs:
+  release-init:
+    name: Initialize Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}"
+          TITLE="${{ github.ref_type == 'tag' && github.ref_name || 'Release v0.1.0' }}"
+          gh release view "$TAG" || gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "## Neko Forum Desktop Client
+
+          Cliente nativo de escritorio ultra-ligero para [Neko Forum](https://fr.neko-void-linux.online/).
+          - **Cero assets embebidos**: Renderiza la URL remota mediante WebView nativo del sistema.
+          - **Rendimiento**: Compilado a máxima potencia en perfil \`release\` con LTO, \`opt-level = \"s\"\`, \`codegen-units = 1\` y binario \`strip\`.
+          - **Binarios disponibles**: Linux x86_64, Windows x86_64 y macOS ARM64."
+
   build:
     name: Build (${{ matrix.os }} - ${{ matrix.target }})
+    needs: release-init
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -66,55 +93,10 @@ jobs:
         run: |
           7z a ${{ matrix.artifact_name }} ./target/${{ matrix.target }}/release/${{ matrix.binary_name }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}
-          if-no-files-found: error
-
-  release:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Display downloaded artifacts
-        run: ls -la dist
-
-      - name: Determine tag name
-        id: vars
+      - name: Upload to GitHub Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "title=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=v0.1.0" >> $GITHUB_OUTPUT
-            echo "title=Release v0.1.0" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create or update Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          name: ${{ steps.vars.outputs.title }}
-          draft: false
-          prerelease: false
-          files: dist/*
-          body: |
-            ## Neko Forum Desktop Client
-
-            Cliente nativo de escritorio ultra-ligero para [Neko Forum](https://fr.neko-void-linux.online/).
-            - **Cero assets embebidos**: Renderiza la URL remota mediante WebView nativo del sistema.
-            - **Rendimiento**: Compilado a máxima potencia en perfil `release` con LTO, `opt-level = "s"`, `codegen-units = 1` y binario `strip`.
-            - **Binarios disponibles**: Linux x86_64, Windows x86_64 y macOS ARM64.
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}"
+          gh release upload "$TAG" ${{ matrix.artifact_name }} --clobber
