@@ -1,0 +1,18 @@
+[package]
+name = "neko-forum-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Cliente de escritorio mínimo para Neko Forum"
+publish = false
+
+[dependencies]
+tao = "0.37.3"
+wry = "0.57.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
